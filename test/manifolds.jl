@@ -1,4 +1,5 @@
-abstract type Manifold{Int, T<:Real} end
+# Sampling from manifolds. Currently used for testing only.
+abstract type Manifold{Int, T<:AbstractFloat} end
 
 # ............................................................................ #
 struct Torus{T} <: Manifold{3, T}
@@ -7,8 +8,11 @@ struct Torus{T} <: Manifold{3, T}
     center::Tuple{T, T, T}
 end
 
-Torus(R::T, r::T) where T = Torus{T}(R, r, (zero(T), zero(T), zero(T)))
-Torus(R, r) = Torus(promote(R, r)...)
+function Torus(R, r)
+    args = convert.(AbstractFloat, (R, r))
+    z = zero(eltype(args))
+    Torus(args..., (z, z, z))
+end
 
 (t::Torus)(θ, φ) =
     ((t.R + t.r*cos(θ)) * cos(φ), (t.R + t.r*cos(θ)) * sin(φ), t.r * sin(θ)) .+
@@ -22,9 +26,11 @@ struct AsymTorus{T} <: Manifold{3, T}
     center::Tuple{T, T, T}
 end
 
-AsymTorus(R::T, r1::T, r2::T) where T =
-    AsymTorus{T}(R, r1, r2, (zero(T), zero(T), zero(T)))
-AsymTorus(R, r1, r2) = AsymTorus(promote(R, r1, r2)...)
+function AsymTorus(R, r1, r2)
+    args = convert.(AbstractFloat, (R, r1, r2))
+    z = zero(eltype(args))
+    AsymTorus(args..., (z, z, z))
+end
 
 function (at::AsymTorus)(θ, φ)
     R = at.R
@@ -41,7 +47,11 @@ struct Sphere{T} <: Manifold{3, T}
     center::Tuple{T, T, T}
 end
 
-Sphere(r::T) where T = Sphere{T}(r, (zero(T), zero(T), zero(T)))
+function Sphere(r)
+    arg = convert(AbstractFloat, r)
+    z = zero(typeof(arg))
+    Sphere(arg, (z, z, z))
+end
 
 (s::Sphere)(θ, φ) =
     (s.r*cos(θ) * sin(φ), s.r*sin(θ) * sin(φ), s.r*cos(φ)) .+ s.center
@@ -51,12 +61,18 @@ struct Circle{T} <: Manifold{2, T}
     r::T
     center::Tuple{T, T}
 end
-Circle(r::T) where T = Circle{T}(r, (zero(T), zero(T)))
+
+function Circle(r)
+    arg = convert(AbstractFloat, r)
+    z = zero(typeof(arg))
+    Circle(arg, (z, z))
+end
+
 (c::Circle)(θ) = (c.r * cos(θ), c.r * sin(θ)) .+ c.center
 
 # ............................................................................ #
 # Uniformly sampling n points from a manifold returning D by n matrix.
-# TODO? circular noise?
+# TODO: Circular noise? Overenginnered as it is?
 function Base.rand(m::Manifold{D, T}, n=1; noise=0) where {D, T}
     res = zeros(T, D, n)
     for i in 1:n

@@ -1,20 +1,26 @@
-struct IntrinsicMetric{I<:Integer, T<:Real, M<:Metric} <: Metric
-    graph::SimpleWeightedGraph{I, T}
+struct IntrinsicMetric{T<:Real, M<:Metric} <: Metric
+    graph::SimpleWeightedGraph{<:Integer, T}
     points::Matrix{T}
     kdtree::KDTree{<:AbstractArray{T}, M, T}
+    metric::M
 end
+
+ambinet_metric(im::IntrinsicMetric) = im.metric
+incidence_graph(im::IntrinsicMetric) = im.graph
+points(im::IntrinsicMetric) = im.points
 
 function IntrinsicMetric(pts, nn; metric = Euclidean())
     kdtree = KDTree(pts, metric, reorder = false)
     n = size(pts, 2)
 
     # Temporary Graph is used to efficiently initialize incidence matrix.
-    # TODO: figure out how to build sparse matrix from schratch?
-    # TODO: add a threshold for maximum edge length or something similar?
+    # TODO: Figure out how to build sparse matrix from schratch?
+    # TODO: Add a threshold for maximum edge length or something similar?
     g_tmp = Graph(n)
     neighs, dists = knn(kdtree, pts, nn, false)
     for (i, ns) in enumerate(neighs)
         for j in ns
+            i == j && continue
             add_edge!(g_tmp, i, j)
         end
     end
@@ -27,41 +33,8 @@ function IntrinsicMetric(pts, nn; metric = Euclidean())
         end
     end
 
-    IntrinsicMetric(g, pts, kdtree)
+    IntrinsicMetric(g, pts, kdtree, metric)
 end
-
-#=
-# Constructor
-function IntrinsicMetric(pts, min_degree; metric = Euclidean())
-    kdtree = KDTree(pts, metric, reorder = false)
-    n = length(pts)
-
-    function estimate_δ(pts, kdtree, min_degree)
-        k = min_degree + 2
-        idxs, dsts = knn(kdtree, pts, k, false)
-        maximum(maximum.(dsts))
-    end
-
-    δ = estimate_δ(pts, kdtree, min_degree)
-
-    g_tmp = Graph(n)
-    for (i, ns) in enumerate(inrange(kdtree, pts, δ))
-        g_tmp.fadjlist[i] = filter(j -> j != i, ns)
-        g_tmp.ne += length(ns) - 1
-    end
-    g = SimpleWeightedGraph(g_tmp)
-    for (i, ns) in enumerate(inrange(kdtree, pts, δ))
-        for j in ns
-            i == j && continue
-            d = evaluate(metric, pts[i], pts[j])
-            g.weights[j, i] = d
-            g.weights[i, j] = d
-        end
-    end
-
-    IntrinsicMetric(g, pts, kdtree)
-end
-=#
 
 function Distances.evaluate(m::IntrinsicMetric, p1, p2)
     p1 == p2 && return 0
@@ -76,4 +49,58 @@ function Distances.evaluate(m::IntrinsicMetric, p1, p2)
 
     total_dist + dijkstra_shortest_paths(m.graph, i1).dists[i2]
 
+end
+
+# TODO: colwise: each col with each other col
+# TODO: pairwise: with one argument
+
+function Distances.pairwise(im::IntrinsicMetric,
+                            a::AbstractMatrix, b::AbstractMatrix)
+    res = zeros(promote_type(eltype(a), eltype(b)), size(a, 2), size(b, 2))
+    pairwise!(res, im, a, b)
+end
+
+function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
+                             a::AbstractMatrix, b::AbstractMatrix)
+    size(a, 1) == size(b, 1) ||
+        throw(DimensionMismatch("The numbers of rows in a and b must match."))
+
+    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
+    b_idx, b_dst = map.(first, knn(im.kdtree, b, 1))
+
+    n = size(a, 2)
+    m = size(b, 2)
+
+    for i in 1:n
+        dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[b_idx]
+        for j in 1:m
+            a[:, i] ≈ b[:, j] && continue
+            res[i, j] = min(a_dst[i] + b_dst[j] + dsts[j])
+        end
+    end
+
+    res
+end
+
+function Distances.pairwise(im::IntrinsicMetric, a::AbstractMatrix)
+    res = zeros(eltype(a), size(a, 2), size(a, 2))
+    pairwise!(res, im, a)
+end
+
+function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
+                             a::AbstractMatrix)
+    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
+    n = size(a, 2)
+
+    for i in 1:n
+        dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[a_idx]
+        for j in 1:i-1
+            a[:, i] ≈ a[:, j] && continue
+            d = min(a_dst[i] + a_dst[j] + dsts[j])
+            res[i, j] = d
+            res[j, i] = d
+        end
+    end
+
+    res
 end
