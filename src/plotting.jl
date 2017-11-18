@@ -23,22 +23,22 @@ end
         pts[1, :], pts[2, :], pts[3, :]
     end
 
-    xs = Segments()
-    ys = Segments()
-    zs = Segments()
+    xs = []; ys = []; zs = []
     for e in edges(g)
         p1 = pts[:, src(e)]
         p2 = pts[:, dst(e)]
-        push!(xs, [p1[1], p2[1]])
-        push!(ys, [p1[2], p2[2]])
-        push!(zs, [p1[3], p2[3]])
+        append!(xs, [p1[1], p2[1], NaN])
+        append!(ys, [p1[2], p2[2], NaN])
+        append!(zs, [p1[3], p2[3], NaN])
     end
+    # Remove last NaN
+    pop!(xs); pop!(ys); pop!(zs)
 
     @series begin
         markersize := :none
         seriestype := :path3d
         linewidth --> 1
         label := :edge
-        xs.pts, ys.pts, zs.pts
+        xs, ys, zs
     end
 end
