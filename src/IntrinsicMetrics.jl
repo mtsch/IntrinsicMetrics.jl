@@ -9,6 +9,6 @@ include("intrinsic_metric.jl")
 include("plotting.jl")
 
 export IntrinsicMetric,
-    ambient_metric, incidence_graph, points, n_points, ambient_dim
+    ambientmetric, adjgraph, points, npoints, ambientdim, points3d
 
-end # module
+end

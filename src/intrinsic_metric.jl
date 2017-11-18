@@ -5,11 +5,11 @@ struct IntrinsicMetric{T<:Real, M<:Metric} <: Metric
     metric::M
 end
 
-ambient_metric(in::IntrinsicMetric) = in.metric
-incidence_graph(in::IntrinsicMetric) = in.graph
-points(in::IntrinsicMetric) = in.points
-n_points(in::IntrinsicMetric) = size(in.points, 2)
-ambient_dim(in::IntrinsicMetric) = size(in.points, 1)
+adjgraph(im::IntrinsicMetric) = im.graph
+points(im::IntrinsicMetric) = im.points
+npoints(im::IntrinsicMetric) = size(im.points, 2)
+ambientdim(im::IntrinsicMetric) = size(im.points, 1)
+ambientmetric(im::IntrinsicMetric) = im.metric
 
 function IntrinsicMetric(pts, nn; metric = Euclidean())
     kdtree = KDTree(pts, metric, reorder = false)
@@ -26,7 +26,8 @@ function IntrinsicMetric(pts, nn; metric = Euclidean())
             add_edge!(g_tmp, i, j)
         end
     end
-    g = SimpleWeightedGraph(g_tmp)
+    # TODO: Allow Int32?
+    g = SimpleWeightedGraph{Int, eltype(pts)}(g_tmp)
     for (i, ns, ds) in zip(1:n, neighs, dists)
         for (j, d) in zip(ns, ds)
             i == j && continue
@@ -38,43 +39,42 @@ function IntrinsicMetric(pts, nn; metric = Euclidean())
     IntrinsicMetric(g, pts, kdtree, metric)
 end
 
-function Distances.evaluate(m::IntrinsicMetric, p1, p2)
+function Distances.evaluate(im::IntrinsicMetric, p1, p2)
     p1 == p2 && return 0
 
-    nearest1 = knn(m.kdtree, p1, 1)
-    nearest2 = knn(m.kdtree, p2, 1)
+    nearest1 = knn(im.kdtree, p1, 1)
+    nearest2 = knn(im.kdtree, p2, 1)
 
     total_dist = first(nearest1[2]) + first(nearest2[2])
 
     i1 = first(nearest1[1])
     i2 = first(nearest2[1])
 
-    total_dist + dijkstra_shortest_paths(m.graph, i1).dists[i2]
+    total_dist + dijkstra_shortest_paths(im.graph, i1).dists[i2]
 
 end
 
 # TODO: colwise: each col with each other col
-# TODO: pairwise: with one argument
 
-function Distances.pairwise(in::IntrinsicMetric,
+function Distances.pairwise(im::IntrinsicMetric,
                             a::AbstractMatrix, b::AbstractMatrix)
     res = zeros(promote_type(eltype(a), eltype(b)), size(a, 2), size(b, 2))
-    pairwise!(res, in, a, b)
+    pairwise!(res, im, a, b)
 end
 
-function Distances.pairwise!(res::AbstractMatrix, in::IntrinsicMetric,
+function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
                              a::AbstractMatrix, b::AbstractMatrix)
     size(a, 1) == size(b, 1) ||
         throw(DimensionMismatch("The numbers of rows in a and b must match."))
 
-    a_idx, a_dst = map.(first, knn(in.kdtree, a, 1))
-    b_idx, b_dst = map.(first, knn(in.kdtree, b, 1))
+    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
+    b_idx, b_dst = map.(first, knn(im.kdtree, b, 1))
 
     n = size(a, 2)
     m = size(b, 2)
 
     for i in 1:n
-        dsts = dijkstra_shortest_paths(in.graph, a_idx[i]).dists[b_idx]
+        dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[b_idx]
         for j in 1:m
             a[:, i] ≈ b[:, j] && continue
             res[i, j] = min(a_dst[i] + b_dst[j] + dsts[j])
@@ -84,18 +84,18 @@ function Distances.pairwise!(res::AbstractMatrix, in::IntrinsicMetric,
     res
 end
 
-function Distances.pairwise(in::IntrinsicMetric, a::AbstractMatrix)
+function Distances.pairwise(im::IntrinsicMetric, a::AbstractMatrix)
     res = zeros(eltype(a), size(a, 2), size(a, 2))
-    pairwise!(res, in, a)
+    pairwise!(res, im, a)
 end
 
-function Distances.pairwise!(res::AbstractMatrix, in::IntrinsicMetric,
+function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
                              a::AbstractMatrix)
-    a_idx, a_dst = map.(first, knn(in.kdtree, a, 1))
+    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
     n = size(a, 2)
 
     for i in 1:n
-        dsts = dijkstra_shortest_paths(in.graph, a_idx[i]).dists[a_idx]
+        dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[a_idx]
         for j in 1:i-1
             a[:, i] ≈ a[:, j] && continue
             d = min(a_dst[i] + a_dst[j] + dsts[j])

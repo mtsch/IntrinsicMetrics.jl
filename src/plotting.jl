@@ -2,7 +2,7 @@
 
 @recipe function f(p::Points3d)
     if length(p.args) != 1 || !(typeof(p.args[1]) <: AbstractMatrix)
-        error("points3d is expecting a single matrix argument. Got: $(typeof(h.args))")
+        error("points3d is expecting a single matrix argument. Got: $(typeof(p.args))")
     end
 
     pts = p.args[1]
@@ -11,10 +11,12 @@
     pts[1, :], pts[2, :], pts[3, :]
 end
 
-@recipe function f(m::IntrinsicMetric)
+@recipe function f(im::IntrinsicMetric)
+    ambientdim(im) == 3 || error("Only 3d points are supported!")
+
     legend := false
-    pts = m.points
-    g = m.graph
+    pts = points(im)
+    g = adjgraph(im)
 
     @series begin
         seriestype := :scatter
