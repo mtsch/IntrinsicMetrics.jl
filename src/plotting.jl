@@ -1,18 +1,20 @@
 @userplot Points3d
 
 @recipe function f(p::Points3d)
-    if length(p.args) != 1 || !(typeof(p.args[1]) <: AbstractMatrix)
-        error("points3d is expecting a single matrix argument. Got: $(typeof(p.args))")
+    if length(p.args) != 1 || !(typeof(first(args)) <: AbstractMatrix)
+        error("points3d is expecting a single matrix argument. " *
+              "Got: $(typeof(p.args))")
     end
 
-    pts = p.args[1]
+    pts = first(args)
     seriestype := :scatter
     markersize --> 0.5
     pts[1, :], pts[2, :], pts[3, :]
 end
 
-@recipe function f(im::IntrinsicMetric)
-    ambientdim(im) == 3 || error("Only 3d points are supported!")
+@recipe function f(im::IntrinsicMetric{T}) where T
+    ambientdim(im) > 3 && error("Can't plot $(ambientdim(im))d points!")
+    flat = ambientdim(im) == 2
 
     legend := false
     pts = points(im)
@@ -22,25 +24,31 @@ end
         seriestype := :scatter
         markersize --> 0.5
         label := :vertex
-        pts[1, :], pts[2, :], pts[3, :]
+        if flat
+            pts[1, :], pts[2, :]
+        else
+            pts[1, :], pts[2, :], pts[3, :]
+        end
     end
 
-    xs = []; ys = []; zs = []
+    xs = T[]; ys = T[]; zs = T[]
     for e in edges(g)
         p1 = pts[:, src(e)]
         p2 = pts[:, dst(e)]
         append!(xs, [p1[1], p2[1], NaN])
         append!(ys, [p1[2], p2[2], NaN])
-        append!(zs, [p1[3], p2[3], NaN])
+        !flat && append!(zs, [p1[3], p2[3], NaN])
     end
-    # Remove last NaN
-    pop!(xs); pop!(ys); pop!(zs)
 
     @series begin
         markersize := :none
-        seriestype := :path3d
+        seriestype := :path
         linewidth --> 1
         label := :edge
-        xs, ys, zs
+        if flat
+            xs, ys
+        else
+            xs, ys, zs
+        end
     end
 end

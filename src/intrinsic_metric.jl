@@ -106,3 +106,7 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
 
     res
 end
+
+function Distances.pairwise(im::IntrinsicMetric)
+    pairwise(im, points(im))
+end

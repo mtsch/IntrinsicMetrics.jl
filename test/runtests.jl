@@ -202,12 +202,9 @@ end
         @test points3d(rand(3, 1000)) ≠ nothing
         @test_throws ErrorException points3d(rand(1000), rand(1000), rand(1000))
     end
-    # TODO: 2d plotting?
     nn = nearestneighn[1]
-    for testset in testsets[1:2], metric in metrics
+    for testset in testsets[1:3], metric in metrics
         @test plot(IntrinsicMetric(testset, nn, metric = metric)) ≠ nothing
     end
-    for testset in testsets[3:4]
-        @test_throws ErrorException plot(IntrinsicMetric(testset, nn))
-    end
+    @test_throws ErrorException plot(IntrinsicMetric(testsets[4], nn))
 end
