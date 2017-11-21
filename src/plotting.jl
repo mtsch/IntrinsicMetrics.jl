@@ -1,12 +1,12 @@
 @userplot Points3d
 
 @recipe function f(p::Points3d)
-    if length(p.args) != 1 || !(typeof(first(args)) <: AbstractMatrix)
+    if length(p.args) != 1 || !(typeof(first(p.args)) <: AbstractMatrix)
         error("points3d is expecting a single matrix argument. " *
               "Got: $(typeof(p.args))")
     end
 
-    pts = first(args)
+    pts = first(p.args)
     seriestype := :scatter
     markersize --> 0.5
     pts[1, :], pts[2, :], pts[3, :]
