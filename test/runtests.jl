@@ -1,12 +1,9 @@
-println("Loading libs...")
 using IntrinsicMetrics
 using Base.Test
-using Distances
 using LightGraphs, SimpleWeightedGraphs
 using Plots; plotly()
 include("manifolds.jl")
 
-println("Preparing tests...")
 n = 200
 repeats_small = 10
 
@@ -38,8 +35,6 @@ function isdistancematrix(m; report = true)
     end
     true
 end
-
-println("Running tests...")
 
 @testset "sanity checks" begin
     # Check sampling.
@@ -137,6 +132,33 @@ end
     @test evaluate(im, [1, 0], [-1, 0]) ≈ π atol=0.01
 end
 
+@testset "pairwise - size errors" begin
+    for testset in testsets, nn in nearestneighn, metric in metrics
+        im = IntrinsicMetric(testset, nn, metric = metric)
+        d  = size(testset, 1)
+        dm = DimensionMismatch
+
+        @test_throws dm evaluate(im, rand(d-1, 1), rand(d,   1))
+        @test_throws dm evaluate(im, rand(d,   1), rand(d-1, 1))
+        @test_throws dm evaluate(im, rand(d+1, 1), rand(d+1, 1))
+
+        @test_throws dm pairwise(im, rand(d,   10), rand(d+1, 11))
+        @test_throws dm pairwise(im, rand(d-1, 10), rand(d-1, 11))
+
+        @test_throws dm pairwise!(zeros(5, 5), im, rand(d-1, 5), rand(d,   5))
+        @test_throws dm pairwise!(zeros(5, 5), im, rand(d-1, 5), rand(d-1, 5))
+        @test_throws dm pairwise!(zeros(6, 5), im, rand(d,   5), rand(d,   5))
+        @test_throws dm pairwise!(zeros(5, 6), im, rand(d,   5), rand(d,   5))
+
+        @test_throws dm pairwise(im, rand(d+1, 10))
+
+        @test_throws dm pairwise!(zeros(10, 11), im, rand(d,   10))
+        @test_throws dm pairwise!(zeros(11, 11), im, rand(d+1, 11))
+
+        @test_throws dm pairwise!(zeros(10, 10), im)
+    end
+end
+
 @testset "pairwise - one matrix" begin
     for testset in testsets, nn in nearestneighn, metric in metrics
         im = IntrinsicMetric(testset, nn, metric = metric)
@@ -144,19 +166,21 @@ end
         # Points from sample.
         pw1 = pairwise(im, testset, testset)
         pw2 = pairwise(im, testset)
+        pw3 = pairwise(im)
         @test isdistancematrix(pw1)
         @test isdistancematrix(pw2)
-        @test pw1 ≈ pw2
-        @test size(pw1) == size(pw2) == (n, n)
+        @test isdistancematrix(pw3)
+        @test pw1 ≈ pw2 ≈ pw3
+        @test size(pw1) == size(pw2) == size(pw3) == (n, n)
 
         # Random points.
         pts = (rand(size(testset, 1), 100) - 0.5) * 3
-        pw3 = pairwise(im, pts, pts)
-        pw4 = pairwise(im, pts)
-        @test isdistancematrix(pw3)
+        pw4 = pairwise(im, pts, pts)
+        pw5 = pairwise(im, pts)
         @test isdistancematrix(pw4)
-        @test pw3 ≈ pw4
-        @test size(pw3) == size(pw4) == (100, 100)
+        @test isdistancematrix(pw5)
+        @test pw4 ≈ pw5
+        @test size(pw4) == size(pw5) == (100, 100)
 
         d1 = Float64[]; d2 = Float64[]; d3 = Float64[]
         for _ in 1:100
@@ -184,7 +208,6 @@ end
         @test pw1' ≈ pw2
         @test all(pw1 .≥ 0)
         @test size(pw1) == (100, 1000)
-        @test_throws DimensionMismatch pairwise(im, rand(3, 100), rand(2, 100))
     end
 end
 

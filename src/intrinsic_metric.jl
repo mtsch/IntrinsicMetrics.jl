@@ -40,6 +40,8 @@ function IntrinsicMetric(pts, nn; metric = Euclidean())
 end
 
 function Distances.evaluate(im::IntrinsicMetric, p1, p2)
+    length(p1) == length(p2) == ambientdim(im) ||
+        throw(DimensionMismatch("Incompatible dimensions!"))
     p1 == p2 && return 0
 
     nearest1 = knn(im.kdtree, p1, 1)
@@ -54,7 +56,7 @@ function Distances.evaluate(im::IntrinsicMetric, p1, p2)
 
 end
 
-# TODO: colwise: each col with each other col
+# TODO: colwise: each col with each other col?
 
 function Distances.pairwise(im::IntrinsicMetric,
                             a::AbstractMatrix, b::AbstractMatrix)
@@ -64,14 +66,16 @@ end
 
 function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
                              a::AbstractMatrix, b::AbstractMatrix)
-    size(a, 1) == size(b, 1) ||
-        throw(DimensionMismatch("The numbers of rows in a and b must match."))
+    n = size(a, 2)
+    m = size(b, 2)
+    size(a, 1) == size(b, 1) == ambientdim(im) ||
+        throw(DimensionMismatch("Incompatible dimensions!"))
+    size(res) ≠ (n, m) &&
+        throw(DimensionMismatch("Output matrix should be $n×$m, " *
+                                "but is $(size(res, 1))×(size(res, 2))"))
 
     a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
     b_idx, b_dst = map.(first, knn(im.kdtree, b, 1))
-
-    n = size(a, 2)
-    m = size(b, 2)
 
     for i in 1:n
         dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[b_idx]
@@ -91,8 +95,14 @@ end
 
 function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
                              a::AbstractMatrix)
-    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
+    size(a, 1) == ambientdim(im) ||
+        throw(DimensionMismatch("Incompatible dimensions!"))
     n = size(a, 2)
+    size(res) == (n, n) ||
+        throw(DimensionMismatch("Output matrix should be $n×$n, " *
+                                "but is $(size(res, 1))×(size(res, 2))"))
+
+    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
 
     for i in 1:n
         dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[a_idx]
@@ -105,6 +115,10 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
     end
 
     res
+end
+
+function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric)
+    pairwise!(res, im, points(im))
 end
 
 function Distances.pairwise(im::IntrinsicMetric)
