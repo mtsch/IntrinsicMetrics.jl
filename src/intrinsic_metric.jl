@@ -15,26 +15,17 @@ function IntrinsicMetric(pts, nn; metric = Euclidean())
     kdtree = KDTree(pts, metric, reorder = false)
     n = size(pts, 2)
 
-    # Temporary Graph is used to efficiently initialize incidence matrix.
-    # TODO: Figure out how to build sparse matrix from schratch?
-    # TODO: Add a threshold for maximum edge length or something similar?
-    g_tmp = Graph(n)
     neighs, dists = knn(kdtree, pts, nn, false)
-    for (i, ns) in enumerate(neighs)
-        for j in ns
-            i == j && continue
-            add_edge!(g_tmp, i, j)
-        end
-    end
-    # TODO: Allow Int32?
-    g = SimpleWeightedGraph{Int, eltype(pts)}(g_tmp)
+    is = Int[]; js = Int[]; vs = eltype(pts)[]
     for (i, ns, ds) in zip(1:n, neighs, dists)
         for (j, d) in zip(ns, ds)
-            i == j && continue
-            g.weights[i, j] = d
-            g.weights[j, i] = d
+            i < j || continue
+            append!(is, [i, j])
+            append!(js, [j, i])
+            append!(vs, [d, d])
         end
     end
+    g = SimpleWeightedGraph(sparse(is, js, vs, n, n))
 
     IntrinsicMetric(g, pts, kdtree, metric)
 end
@@ -70,7 +61,7 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
     m = size(b, 2)
     size(a, 1) == size(b, 1) == ambientdim(im) ||
         throw(DimensionMismatch("Incompatible dimensions!"))
-    size(res) ≠ (n, m) &&
+    size(res) == (n, m) ||
         throw(DimensionMismatch("Output matrix should be $n×$m, " *
                                 "but is $(size(res, 1))×(size(res, 2))"))
 
@@ -95,9 +86,9 @@ end
 
 function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
                              a::AbstractMatrix)
+    n = size(a, 2)
     size(a, 1) == ambientdim(im) ||
         throw(DimensionMismatch("Incompatible dimensions!"))
-    n = size(a, 2)
     size(res) == (n, n) ||
         throw(DimensionMismatch("Output matrix should be $n×$n, " *
                                 "but is $(size(res, 1))×(size(res, 2))"))

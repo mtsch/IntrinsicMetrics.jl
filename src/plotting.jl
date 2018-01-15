@@ -13,7 +13,7 @@
 end
 
 @recipe function f(im::IntrinsicMetric{T}) where T
-    ambientdim(im) > 3 && error("Can't plot $(ambientdim(im))d points!")
+    2 ≤ ambientdim(im) ≤ 3 || error("Can't plot $(ambientdim(im))d points!")
     flat = ambientdim(im) == 2
 
     legend := false
