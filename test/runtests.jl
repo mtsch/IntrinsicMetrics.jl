@@ -16,8 +16,8 @@ cloud9 = rand(9, n)
 # Datasets used in testing.
 testsets = [sphere, atorus, circle, cloud9]
 
-# Nearest neighbors values used in testing.
-nearestneighn = div.(n, [20, 10])
+# Radius values used in testing.
+radii = [0.5, 0.7]
 
 # Metrics used in testing.
 metrics = [Euclidean(), Minkowski(3), Cityblock(), Chebyshev()]
@@ -59,26 +59,25 @@ end
 
 @testset "IntrinsicMetric internals" begin
     @testset "ambient metric" begin
-        for testset in testsets, nn in nearestneighn, metric in metrics
-            im = IntrinsicMetric(testset, nn, metric = metric)
+        for testset in testsets, r in radii, metric in metrics
+            im = IntrinsicMetric(testset, r, metric = metric)
             @test ambientmetric(im) == metric
             @test isa(im, IntrinsicMetric{Float64, typeof(metric)})
        end
     end
 
     @testset "points" begin
-        for testset in testsets, nn in nearestneighn, metric in metrics
-            im = IntrinsicMetric(testset, nn, metric = metric)
+        for testset in testsets, r in radii, metric in metrics
+            im = IntrinsicMetric(testset, r, metric = metric)
             @test points(im) == testset
             @test size(testset) == (ambientdim(im), npoints(im))
         end
     end
 
     @testset "graph properties" begin
-        for testset in testsets, nn in nearestneighn, metric in metrics
-            im = IntrinsicMetric(testset, nn, metric = metric)
+        for testset in testsets, r in radii, metric in metrics
+            im = IntrinsicMetric(testset, r, metric = metric)
             @test nv(adjgraph(im)) == npoints(im)
-            @test ne(adjgraph(im)) ≤  npoints(im) * nn
             @test isdistancematrix(adjgraph(im).weights)
         end
     end
@@ -95,8 +94,8 @@ end
 end
 
 @testset "evaluate" begin
-    for testset in testsets, nn in nearestneighn, metric in metrics
-        im = IntrinsicMetric(testset, nn, metric = metric)
+    for testset in testsets, r in radii, metric in metrics
+        im = IntrinsicMetric(testset, r, metric = metric)
         d1 = Float64[]
         d2 = Float64[]
         d3 = Float64[]
@@ -120,21 +119,21 @@ end
     end
 
     # Going around sphere should be about π.
-    im = IntrinsicMetric(hcat(rand(Sphere(1), 1000), [0, 0, 1], [0, 0,-1]), 30)
+    im = IntrinsicMetric(hcat(rand(Sphere(1), 1000), [0, 0, 1], [0, 0,-1]), 0.5)
     @test evaluate(im, [0, 0,-1], [0, 0, 1]) ≈ π     atol=0.1
     @test evaluate(im, [0, 0,-2], [0, 0, 1]) ≈ (1+π) atol=0.1
     @test evaluate(im, [0, 0,-1], [0, 0, 2]) ≈ (1+π) atol=0.1
     @test evaluate(im, [0, 0,-2], [0, 0, 2]) ≈ (2+π) atol=0.1
 
     # Same for circle.
-    im = IntrinsicMetric(rand(Circle(1), 1000), 30)
+    im = IntrinsicMetric(rand(Circle(1), 1000), 0.1)
     @test evaluate(im, [0,-1], [ 0, 1]) ≈ π atol=0.01
     @test evaluate(im, [1, 0], [-1, 0]) ≈ π atol=0.01
 end
 
 @testset "pairwise - size errors" begin
-    for testset in testsets, nn in nearestneighn, metric in metrics
-        im = IntrinsicMetric(testset, nn, metric = metric)
+    for testset in testsets, r in radii, metric in metrics
+        im = IntrinsicMetric(testset, r, metric = metric)
         d  = size(testset, 1)
         dm = DimensionMismatch
 
@@ -160,8 +159,8 @@ end
 end
 
 @testset "pairwise - one matrix" begin
-    for testset in testsets, nn in nearestneighn, metric in metrics
-        im = IntrinsicMetric(testset, nn, metric = metric)
+    for testset in testsets, r in radii, metric in metrics
+        im = IntrinsicMetric(testset, r, metric = metric)
 
         # Points from sample.
         pw1 = pairwise(im, testset, testset)
@@ -197,8 +196,8 @@ end
 end
 
 @testset "pairwise - two matrices" begin
-    for testset in testsets, nn in nearestneighn, metric in metrics
-        im = IntrinsicMetric(testset, nn, metric = metric)
+    for testset in testsets, r in radii, metric in metrics
+        im = IntrinsicMetric(testset, r, metric = metric)
         pts1 = (rand(size(testset, 1), 100) - 0.5) * 3
         pts2 = (rand(size(testset, 1), 1000) - 0.5) * 3
 
@@ -214,7 +213,7 @@ end
 @testset "pairwise - full graph" begin
     for _ in 1:repeats_small, metric in metrics
         pts = rand(5, n)
-        im = IntrinsicMetric(pts, n, metric = metric)
+        im = IntrinsicMetric(pts, 10, metric = metric)
 
         @test adjgraph(im).weights ≈ pairwise(im, pts) ≈ pairwise(metric, pts)
     end
@@ -225,9 +224,9 @@ end
         @test points3d(rand(3, 1000)) ≠ nothing
         @test_throws ErrorException points3d(rand(1000), rand(1000), rand(1000))
     end
-    nn = nearestneighn[1]
+    r = radii[1]
     for testset in testsets[1:3], metric in metrics
-        @test plot(IntrinsicMetric(testset, nn, metric = metric)) ≠ nothing
+        @test plot(IntrinsicMetric(testset, r, metric = metric)) ≠ nothing
     end
-    @test_throws ErrorException plot(IntrinsicMetric(testsets[4], nn))
+    @test_throws ErrorException plot(IntrinsicMetric(testsets[4], r))
 end

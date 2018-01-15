@@ -11,20 +11,21 @@ npoints(im::IntrinsicMetric) = size(im.points, 2)
 ambientdim(im::IntrinsicMetric) = size(im.points, 1)
 ambientmetric(im::IntrinsicMetric) = im.metric
 
-function IntrinsicMetric(pts, nn; metric = Euclidean())
+function IntrinsicMetric(pts, r; metric = Euclidean())
     kdtree = KDTree(pts, metric, reorder = false)
-    n = size(pts, 2)
 
-    neighs, dists = knn(kdtree, pts, nn, false)
+    neighs = inrange(kdtree, pts, r, false)
     is = Int[]; js = Int[]; vs = eltype(pts)[]
-    for (i, ns, ds) in zip(1:n, neighs, dists)
-        for (j, d) in zip(ns, ds)
+    for (i, ns) in enumerate(neighs)
+        for j in ns
             i < j || continue
             append!(is, [i, j])
             append!(js, [j, i])
+            d = evaluate(metric, pts[:, i], pts[:, j])
             append!(vs, [d, d])
         end
     end
+    n = size(pts, 2)
     g = SimpleWeightedGraph(sparse(is, js, vs, n, n))
 
     IntrinsicMetric(g, pts, kdtree, metric)
@@ -44,7 +45,6 @@ function Distances.evaluate(im::IntrinsicMetric, p1, p2)
     i2 = first(nearest2[1])
 
     total_dist + dijkstra_shortest_paths(im.graph, i1).dists[i2]
-
 end
 
 # TODO: colwise: each col with each other col?
