@@ -1,7 +1,10 @@
 using IntrinsicMetrics
 using Base.Test
+using StaticArrays
+using Suppressor
 using LightGraphs, SimpleWeightedGraphs
-using Plots; plotly()
+using NearestNeighbors
+using Plots
 include("manifolds.jl")
 
 n = 200
@@ -62,14 +65,18 @@ end
         for testset in testsets, r in radii, metric in metrics
             im = IntrinsicMetric(testset, r, metric = metric)
             @test ambientmetric(im) == metric
-            @test isa(im, IntrinsicMetric{Float64, typeof(metric)})
+            @test isa(im, IntrinsicMetric{Float64, size(testset, 1), typeof(metric)})
        end
     end
 
     @testset "points" begin
         for testset in testsets, r in radii, metric in metrics
-            im = IntrinsicMetric(testset, r, metric = metric)
-            @test points(im) == testset
+            im  = IntrinsicMetric(testset, r, metric = metric)
+            dim = size(testset, 1)
+            len = size(testset, 2)
+            @test points(im) == reinterpret(SVector{dim, eltype(testset)},
+                                            testset,
+                                            (len, ))
             @test size(testset) == (ambientdim(im), npoints(im))
         end
     end
@@ -87,8 +94,30 @@ end
             testset = rand(Sphere(T(1.0)), n)
             im = IntrinsicMetric(testset, 30)
             @test eltype(testset) == T
-            @test isa(im, IntrinsicMetric{T, Euclidean})
+            @test isa(im, IntrinsicMetric{T, size(testset, 1), Euclidean})
             @test isa(evaluate(im, [1.,0.,0.], [-1.,0.,0.]), T)
+        end
+    end
+
+    @testset "show" begin
+        for testset in testsets, r in radii, metric in metrics
+            T = eltype(testset)
+            D = size(testset, 1)
+            M = typeof(metric)
+            n = size(testset, 2)
+            N = typeof(BallTree(testset, metric))
+
+            im = IntrinsicMetric(testset, r, metric = metric)
+            str = """
+                  IntrinsicMetric{$T, $D, $M, SVector{$D,$T}, $N}
+                    Number of points: $(length(im.points))
+                    Dimensions: $D
+                    Radius: $r
+                    Metric: $metric
+                    Graph: $(im.graph)
+                  """
+            @test @capture_out(println(im)) == str
+            @test @capture_err(println(STDERR, im)) == str
         end
     end
 end
@@ -190,7 +219,6 @@ end
             push!(d2, pw2[j, k])
             push!(d3, pw2[i, k])
         end
-        # Triangle inequality (symmetry and non-negativity were tested).
         @test all(d3 .≤ d1 .+ d2 .+ sqrt(eps(Float64)))
     end
 end
@@ -219,11 +247,7 @@ end
     end
 end
 
-@testset "plotting does not crash" begin
-    for _ in 1:repeats_small
-        @test points3d(rand(3, 1000)) ≠ nothing
-        @test_throws ErrorException points3d(rand(1000), rand(1000), rand(1000))
-    end
+@testset "plotting" begin
     r = radii[1]
     for testset in testsets[1:3], metric in metrics
         @test plot(IntrinsicMetric(testset, r, metric = metric)) ≠ nothing

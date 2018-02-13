@@ -1,34 +1,53 @@
-struct IntrinsicMetric{T<:Real, M<:Metric} <: Metric
-    graph::SimpleWeightedGraph{<:Integer, T}
-    points::Matrix{T}
-    kdtree::KDTree{<:AbstractArray{T}, M, T}
-    metric::M
+struct IntrinsicMetric{T, D, M<:Metric,
+                       V<:SVector{D, T}, N<:NearestNeighbors.NNTree{V, M}} <: Metric
+    points ::Vector{V}
+    radius ::T
+    metric ::M
+    graph  ::SimpleWeightedGraph{Int, T}
+    tree   ::N
 end
 
 adjgraph(im::IntrinsicMetric) = im.graph
 points(im::IntrinsicMetric) = im.points
-npoints(im::IntrinsicMetric) = size(im.points, 2)
-ambientdim(im::IntrinsicMetric) = size(im.points, 1)
+npoints(im::IntrinsicMetric) = length(im.points)
+ambientdim(im::IntrinsicMetric{T, D}) where {T, D} = D
 ambientmetric(im::IntrinsicMetric) = im.metric
 
-function IntrinsicMetric(pts, r; metric = Euclidean())
-    kdtree = KDTree(pts, metric, reorder = false)
+function Base.show(io::IO, im::IntrinsicMetric{T, D, M, V, N}) where {T, D, M, V, N}
+    println(io, "IntrinsicMetric{$T, $D, $M, $V, $N}")
+    println(io, "  Number of points: $(length(im.points))")
+    println(io, "  Dimensions: $D")
+    println(io, "  Radius: $(im.radius)")
+    println(io, "  Metric: $(im.metric)")
+    print(io, "  Graph: $(im.graph)")
+end
 
-    neighs = inrange(kdtree, pts, r, false)
-    is = Int[]; js = Int[]; vs = eltype(pts)[]
+function IntrinsicMetric(data::AbstractMatrix{T}, r;
+                         metric = Euclidean()) where T
+    dim = size(data, 1)
+    pts = reinterpret(SVector{dim, T}, data, (length(data) ÷ dim, ))
+    IntrinsicMetric(pts, r, metric = metric)
+end
+
+function IntrinsicMetric{T, D, M<:Metric}(pts::AbstractVector{SVector{D, T}}, r;
+                                          metric::M = Euclidean())
+    tree = BallTree(pts, metric, reorder = false)
+
+    neighs = inrange(tree, pts, r, false)
+    is = Int[]; js = Int[]; ds = T[]
     for (i, ns) in enumerate(neighs)
         for j in ns
             i < j || continue
             append!(is, [i, j])
             append!(js, [j, i])
-            d = evaluate(metric, pts[:, i], pts[:, j])
-            append!(vs, [d, d])
+            d = evaluate(metric, pts[i], pts[j])
+            append!(ds, [d, d])
         end
     end
-    n = size(pts, 2)
-    g = SimpleWeightedGraph(sparse(is, js, vs, n, n))
+    n = length(pts)
+    g = SimpleWeightedGraph(sparse(is, js, ds, n, n))
 
-    IntrinsicMetric(g, pts, kdtree, metric)
+    IntrinsicMetric{T, D, M, eltype(pts), typeof(tree)}(pts, T(r), metric, g, tree)
 end
 
 function Distances.evaluate(im::IntrinsicMetric, p1, p2)
@@ -36,8 +55,8 @@ function Distances.evaluate(im::IntrinsicMetric, p1, p2)
         throw(DimensionMismatch("Incompatible dimensions!"))
     p1 == p2 && return 0
 
-    nearest1 = knn(im.kdtree, p1, 1)
-    nearest2 = knn(im.kdtree, p2, 1)
+    nearest1 = knn(im.tree, p1, 1)
+    nearest2 = knn(im.tree, p2, 1)
 
     total_dist = first(nearest1[2]) + first(nearest2[2])
 
@@ -65,8 +84,8 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
         throw(DimensionMismatch("Output matrix should be $n×$m, " *
                                 "but is $(size(res, 1))×(size(res, 2))"))
 
-    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
-    b_idx, b_dst = map.(first, knn(im.kdtree, b, 1))
+    a_idx, a_dst = map.(first, knn(im.tree, a, 1))
+    b_idx, b_dst = map.(first, knn(im.tree, b, 1))
 
     for i in 1:n
         dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[b_idx]
@@ -93,7 +112,7 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
         throw(DimensionMismatch("Output matrix should be $n×$n, " *
                                 "but is $(size(res, 1))×(size(res, 2))"))
 
-    a_idx, a_dst = map.(first, knn(im.kdtree, a, 1))
+    a_idx, a_dst = map.(first, knn(im.tree, a, 1))
 
     for i in 1:n
         dsts = dijkstra_shortest_paths(im.graph, a_idx[i]).dists[a_idx]
@@ -108,10 +127,13 @@ function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric,
     res
 end
 
-function Distances.pairwise!(res::AbstractMatrix, im::IntrinsicMetric)
-    pairwise!(res, im, points(im))
+function Distances.pairwise!(res::AbstractMatrix{T},
+                             im::IntrinsicMetric{T, D}) where {T, D}
+    pts = reinterpret(T, points(im), (D, npoints(im)))
+    pairwise!(res, im, pts)
 end
 
-function Distances.pairwise(im::IntrinsicMetric)
-    pairwise(im, points(im))
+function Distances.pairwise(im::IntrinsicMetric{T, D}) where {T, D}
+    pts = reinterpret(T, points(im), (D, npoints(im)))
+    pairwise(im, pts)
 end

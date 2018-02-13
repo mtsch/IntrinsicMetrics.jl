@@ -1,6 +1,7 @@
 module IntrinsicMetrics
 
 using NearestNeighbors
+using StaticArrays
 using Distances
 using LightGraphs, SimpleWeightedGraphs
 using RecipesBase

@@ -1,6 +1,7 @@
 julia 0.6
-Distances 0.5.0
-NearestNeighbors 0.3.0
-LightGraphs 0.11.0
-SimpleWeightedGraphs 0.3.0
-RecipesBase 0.2.0
+Distances
+NearestNeighbors
+LightGraphs
+SimpleWeightedGraphs
+StaticArrays
+RecipesBase

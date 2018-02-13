@@ -44,4 +44,4 @@ build_script:
       Pkg.clone(pwd(), \"IntrinsicMetrics\"); Pkg.build(\"IntrinsicMetrics\")"
 
 test_script:
-  - C:\projects\julia\bin\julia -e "Pkg.add(\"Plots\"); Pkg.add(\"Plotly\"); Pkg.test(\"IntrinsicMetrics\")"
+  - C:\projects\julia\bin\julia -e "Pkg.add(\"Plots\"); Pkg.add(\"Suppressor\"); Pkg.test(\"IntrinsicMetrics\")"
